@@ -37,7 +37,9 @@ export const changePassword = async (currentPassword, newPassword) => {
 };
 
 export const getCurrentUser = async () => {
-  const response = await apiClient.get('/api/user');
+  const token = localStorage.getItem('access_token');
+  const headers = token ? { Authorization: `Bearer ${token}` } : {};
+  const response = await apiClient.get('/api/user', { headers });
   return response.data;
 };
 
@@ -48,5 +50,5 @@ export const updateUserProfile = async (userData) => {
 
 // Google OAuth Start URL
 export const getGoogleOAuthUrl = () => {
-  return `${backendUrl}/api/connect/google`;
+  return `${backendUrl}/api/connect/google/`;
 };

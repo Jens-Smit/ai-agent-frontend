@@ -24,10 +24,11 @@
     "@testing-library/user-event": "^14.5.0",
     "ajv": "^6.12.6",
     "ajv-keywords": "^3.5.2",
+    "cross-env": "^10.1.0",
     "react-scripts": "5.0.1"
   },
   "scripts": {
-    "start": "react-scripts start -host 0.0.0.0",
+    "start": "cross-env HTTPS=true SSL_CRT_FILE=./127.0.0.1.pem SSL_KEY_FILE=./127.0.0.1-key.pem react-scripts start --host 0.0.0.0",
     "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"

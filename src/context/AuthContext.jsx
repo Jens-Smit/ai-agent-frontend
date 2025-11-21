@@ -1,161 +1,121 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { getCurrentUser } from '../api/auth';
+import { getCurrentUser, logout } from '../api/auth';
 
 const AuthContext = createContext(null);
 
-// Hilfsfunktion: Extrahiert Parameter aus dem URL-Hash (z.B. #access_token=...)
-const parseHashParams = (hash) => {
-  const params = {};
-  if (!hash) return params;
-  
-  const hashString = hash.substring(1); // Entfernt das führende #
-  
-  hashString.split('&').forEach(pair => {
-    const [key, value] = pair.split('=');
-    if (key && value) {
-      params[decodeURIComponent(key)] = decodeURIComponent(value);
-    }
-  });
-  return params;
-};
-
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+    const [user, setUser] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
 
-  // Der Pfad, auf den Google zurückleitet
-  const OAUTH_CALLBACK_PATH = '/oauth-callback';
-
-  const checkAuth = useCallback(async () => {
-    // 1. Öffentliche Pfade ignorieren (Performance)
-    const publicPaths = ['/login', '/register', '/reset-password'];
-    const currentPath = window.location.pathname;
-    
-    if (publicPaths.some(path => currentPath.includes(path))) {
-      console.log('[Auth] Skipping auth check on public page');
-      setLoading(false);
-      return Promise.resolve(null); 
-    }
-
-    // 2. WICHTIG: Wenn kein Token im Storage ist, gar nicht erst versuchen!
-    // Das verhindert den 401 Fehler in Ihren Logs.
-    const token = localStorage.getItem('access_token');
-    if (!token) {
-      console.log('[Auth] No token found in storage, skipping API call.');
-      setLoading(false);
-      return Promise.resolve(null);
-    }
-
-    try {
-      setLoading(true);
-      console.log('[Auth] Checking authentication with token...');
-      
-      // Der HTTP-Client (axios) muss sich den Token selbst aus localStorage holen
-      const data = await getCurrentUser(); 
-      
-      if (data.user || data.email) {
-        console.log('[Auth] User authenticated:', data.user?.email || data.email);
-        const userData = data.user || data;
+    // Hilfsfunktion: Tokens aus dem LocalStorage und den User-State synchronisieren.
+    // Wird für den traditionellen Login benötigt, da hier Tokens direkt in der JSON-Antwort kommen.
+    const loginUser = useCallback((userData, tokens = null) => {
+        // Diese Logik ist notwendig, falls der Standard-Login die Tokens in der JSON-Antwort liefert.
+        if (tokens && tokens.access_token) {
+            localStorage.setItem('access_token', tokens.access_token);
+            if (tokens.refresh_token) {
+                localStorage.setItem('refresh_token', tokens.refresh_token);
+            }
+        }
         setUser(userData);
         setError(null);
-        return Promise.resolve(userData); 
-      } else {
+        console.log('[Auth] User State synchronisiert (via Standard-Login)');
+    }, []);
+
+    // Hilfsfunktion: Logout (Token entfernen und State löschen)
+    const logoutUser = useCallback(async () => {
+        // OPTIONAL: Backend-Logout aufrufen, um ggf. Refresh-Token zu invalidieren
+        await logout(); 
+
+        // Tokens aus LocalStorage entfernen (nur für den Standard-Login-Pfad nötig)
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('refresh_token');
+        
         setUser(null);
-        return Promise.resolve(null);
-      }
-    } catch (err) {
-      console.warn('[Auth] Check failed:', err.message);
-      
-      // Wenn der Check fehlschlägt (z.B. 401 trotz Token), aufräumen
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('refresh_token');
-      
-      setUser(null);
-      setError(null);
-      return Promise.reject(err); 
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+        setError(null);
+        console.log('[Auth] Logout erfolgreich.');
+    }, []);
 
-  const handleOAuthRedirect = useCallback(async () => {
-    const currentPath = window.location.pathname;
-    const hash = window.location.hash;
+    // Hauptfunktion: Prüft, ob User eingeloggt ist (via Cookie oder LocalStorage Token)
+    const checkAuth = useCallback(async () => {
+        // Beim Aufruf von getCurrentUser() wird folgendes passieren:
+        // 1. Der Browser sendet automatisch das HttpOnly-Cookie (OAuth-Flow).
+        // 2. Deine apiClient/Interceptor hängt ggf. das LocalStorage-Token an (Standard-Login-Flow).
+        // WICHTIG: KEINE Token-Prüfung hier im Frontend, wir verlassen uns auf den HTTP-Request.
 
-    // Prüfen, ob wir auf der Callback-Seite sind UND Tokens im Hash haben
-    if (currentPath.includes(OAUTH_CALLBACK_PATH) && hash) {
-      console.log('[OAuth] Handling redirect callback...');
-      const params = parseHashParams(hash);
+        try {
+            setLoading(true);
+            const data = await getCurrentUser(); 
 
-      const accessToken = params.access_token;
-      const refreshToken = params.refresh_token;
+            // Stelle sicher, dass du das richtige User-Objekt extrahierst
+            const userData = data.user || data; 
+            
+            setUser(userData);
+            setError(null);
+            console.log('[Auth] checkAuth: Backend hat User validiert.', userData.id);
+            return userData;
 
-      if (accessToken && refreshToken) {
-        console.log('[OAuth] Tokens found. Storing immediately...');
-        
-        // 1. Tokens speichern (Kritischster Schritt)
-        localStorage.setItem('access_token', accessToken);
-        localStorage.setItem('refresh_token', refreshToken);
-        
-        // 2. URL bereinigen (für die Optik, damit Token nicht in History bleibt)
-        window.history.replaceState(null, '', OAUTH_CALLBACK_PATH);
-        
-        // 3. SOFORT Weiterleiten
-        // Wir führen hier KEIN checkAuth() aus. Das vermeidet Race Conditions.
-        // Die neue Seite (/dashboard) lädt frisch und führt dann checkAuth() mit den gespeicherten Tokens aus.
-        console.log('[OAuth] Redirecting to dashboard...');
-        window.location.replace('/dashboard');
-        
-        return true; // Signalisiert, dass der Redirect behandelt wurde
-      }
-    }
-    return false;
-  }, []);
+        } catch (err) {
+            console.warn('[Auth] checkAuth fehlgeschlagen. Token/Cookie ungültig oder fehlt.');
+            
+            // Bei Fehler Tokens aus LocalStorage entfernen (für Standard-Login)
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('refresh_token');
+            
+            setUser(null);
+            return null;
 
-  useEffect(() => {
-    // Logik beim Mounten:
-    // Erst schauen, ob wir gerade von Google kommen (Redirect).
-    // Wenn ja -> Tokens speichern & Wegleiten.
-    // Wenn nein -> Normaler Auth-Check.
-    handleOAuthRedirect().then(isHandled => {
-      if (!isHandled) {
-        checkAuth();
-      }
-    });
-  }, [checkAuth, handleOAuthRedirect]);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
 
-  const loginUser = useCallback((userData) => {
-    console.log('[Auth] User logged in manually');
-    setUser(userData);
-    setError(null);
-  }, []);
+    // Initialer Effekt: Führt den ersten Auth-Check beim App-Start durch
+    useEffect(() => {
+        const initAuth = async () => {
+            console.log('[Auth Initialisierung] Starte Überprüfung...');
+            
+            // 1. TOKEN-BEREINIGUNG (Wichtig für OAuth-Redirect)
+            // Prüft, ob wir gerade von einem OAuth-Redirect mit URL-Parametern kommen.
+            // Im Cookie-Only-Flow sollte dein Backend KEINE URL-Parameter mehr senden.
+            // Falls doch, entfernen wir sie hier, damit sie nicht im LocalStorage landen
+            // und der Cookie-Flow korrekt getestet wird.
+            
+            const searchParams = new URLSearchParams(window.location.search);
+            if (searchParams.has('access_token')) {
+                // Tokens sind in der URL, das ist der alte Flow. Wir bereinigen.
+                console.warn('[Auth Initialisierung] Tokens in URL gefunden. URL wird bereinigt.');
+                
+                // WICHTIG: URL bereinigen, damit der User die Tokens nicht sieht
+                // und damit beim Refresh nicht erneut "eingeloggt" wird.
+                const newUrl = window.location.pathname; 
+                window.history.replaceState({}, document.title, newUrl);
+            }
 
-  const logoutUser = useCallback(() => {
-    console.log('[Auth] User logged out');
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
-    setUser(null);
-    setError(null);
-    // Optional: Zur Login-Seite leiten
-    // window.location.href = '/login';
-  }, []);
+            // 2. Auth-Check durchführen (prüft Cookie/Local-Token)
+            await checkAuth();
+            console.log('[Auth Initialisierung] Überprüfung abgeschlossen.');
+        };
 
-  const value = {
-    user,
-    loading,
-    error,
-    isAuthenticated: !!user,
-    loginUser,
-    logoutUser,
-    checkAuth,
-  };
+        initAuth();
+    }, [checkAuth]); // checkAuth ist stabil dank useCallback
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+    const value = {
+        user,
+        loading,
+        error,
+        isAuthenticated: !!user,
+        loginUser,
+        logoutUser,
+        checkAuth,
+    };
+
+    return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
 export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (!context) throw new Error('useAuth must be used within AuthProvider');
-  return context;
+    const context = useContext(AuthContext);
+    if (!context) throw new Error('useAuth must be used inside AuthProvider');
+    return context;
 };
