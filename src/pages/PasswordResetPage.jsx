@@ -1,11 +1,19 @@
+// src/pages/PasswordResetPage.jsx
 import React, { useState } from 'react';
 import { useNavigate, useSearchParams, Link as RouterLink } from 'react-router-dom';
+import {
+  Box,
+  Card,
+  CardContent,
+  TextField,
+  Button,
+  Typography,
+  Link,
+  Alert,
+} from '@mui/material';
+import { motion } from 'framer-motion';
 import { requestPasswordReset, resetPassword } from '../api/auth';
 import { getErrorMessage } from '../api/client';
-import Button from '../components/shared/Button';
-import Input from '../components/shared/Input';
-import Card from '../components/shared/Card';
-import Alert from '../components/shared/Alert';
 
 const PasswordResetPage = () => {
   const [searchParams] = useSearchParams();
@@ -22,6 +30,12 @@ const PasswordResetPage = () => {
 
   const handleRequestReset = async (e) => {
     e.preventDefault();
+    
+    if (!email) {
+      setError('Bitte E-Mail-Adresse eingeben');
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
@@ -38,8 +52,14 @@ const PasswordResetPage = () => {
 
   const handleResetPassword = async (e) => {
     e.preventDefault();
+    
     if (newPassword !== confirmPassword) {
       setError('Passwörter stimmen nicht überein');
+      return;
+    }
+
+    if (newPassword.length < 8) {
+      setError('Passwort muss mindestens 8 Zeichen lang sein');
       return;
     }
 
@@ -58,75 +78,171 @@ const PasswordResetPage = () => {
     }
   };
 
-  return (<div style={{ 
-      minHeight: '100vh', 
-      display: 'flex', 
-      alignItems: 'center', 
-      justifyContent: 'center', 
-      background: '#f5f5f5' 
-    }}>
-      <Card style={{ maxWidth: '450px', width: '100%', margin: '20px' }}>
-        <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-          <div style={{ fontSize: '3rem', marginBottom: '16px' }}>🔒</div>
-          <h1 style={{ margin: '0 0 8px', fontSize: '2rem', color: '#333' }}>
-            Passwort zurücksetzen
-          </h1>
-          <p style={{ margin: 0, color: '#666' }}>
-            {step === 0 && 'Gib deine E-Mail-Adresse ein'}
-            {step === 1 && 'Prüfe dein E-Mail-Postfach'}
-            {step === 2 && 'Passwort erfolgreich zurückgesetzt'}
-          </p>
-        </div>    {error && <Alert severity="error" onClose={() => setError(null)}>{error}</Alert>}
-    {success && step === 1 && (
-      <Alert severity="success">Reset-Link wurde gesendet! Prüfe dein Postfach.</Alert>
-    )}
-    {success && step === 2 && (
-      <Alert severity="success">Passwort erfolgreich zurückgesetzt! Weiterleitung...</Alert>
-    )}    {/* Request Reset Form */}
-    {!token && !success && (
-      <form onSubmit={handleRequestReset}>
-        <Input 
-          label="E-Mail" 
-          type="email" 
-          value={email} 
-          onChange={(e) => setEmail(e.target.value)} 
-          fullWidth 
-          required 
-        />
-        <Button type="submit" fullWidth loading={loading} disabled={loading}>
-          Reset-Link senden
-        </Button>
-        <p style={{ textAlign: 'center', marginTop: '16px' }}>
-          <RouterLink to="/login" style={{ color: '#667eea', textDecoration: 'none' }}>
-            Zurück zum Login
-          </RouterLink>
-        </p>
-      </form>
-    )}    {/* Reset Password Form */}
-    {token && !success && (
-      <form onSubmit={handleResetPassword}>
-        <Input 
-          label="Neues Passwort" 
-          type="password" 
-          value={newPassword} 
-          onChange={(e) => setNewPassword(e.target.value)} 
-          fullWidth 
-          required 
-        />
-        <Input 
-          label="Passwort bestätigen" 
-          type="password" 
-          value={confirmPassword} 
-          onChange={(e) => setConfirmPassword(e.target.value)} 
-          fullWidth 
-          required 
-        />
-        <Button type="submit" fullWidth loading={loading} disabled={loading}>
-          Passwort zurücksetzen
-        </Button>
-      </form>
-    )}
-  </Card>
-</div>
-);
-};export default PasswordResetPage;
+  return (
+    <Box
+      sx={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        bgcolor: 'background.default',
+        p: 2,
+      }}
+    >
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+      >
+        <Card sx={{ maxWidth: 450, width: '100%' }}>
+          <CardContent sx={{ p: 4 }}>
+            {/* Logo & Title */}
+            <Box sx={{ textAlign: 'center', mb: 4 }}>
+              <Box
+                sx={{
+                  width: 80,
+                  height: 80,
+                  borderRadius: '50%',
+                  background: 'linear-gradient(135deg, #4299E1 0%, #38B2AC 100%)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '3rem',
+                  mb: 2,
+                }}
+              >
+                🔒
+              </Box>
+              <Typography variant="h4" fontWeight={600} gutterBottom>
+                Passwort zurücksetzen
+              </Typography>
+              <Typography color="text.secondary">
+                {step === 0 && 'Geben Sie Ihre E-Mail-Adresse ein'}
+                {step === 1 && !token && 'Prüfen Sie Ihr E-Mail-Postfach'}
+                {step === 1 && token && 'Neues Passwort eingeben'}
+                {step === 2 && 'Passwort erfolgreich zurückgesetzt'}
+              </Typography>
+            </Box>
+
+            {/* Error Alert */}
+            {error && (
+              <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
+                {error}
+              </Alert>
+            )}
+
+            {/* Success Alert */}
+            {success && step === 1 && !token && (
+              <Alert severity="success" sx={{ mb: 3 }}>
+                Reset-Link wurde gesendet! Prüfen Sie Ihr Postfach.
+              </Alert>
+            )}
+
+            {success && step === 2 && (
+              <Alert severity="success" sx={{ mb: 3 }}>
+                Passwort erfolgreich zurückgesetzt! Weiterleitung zum Login...
+              </Alert>
+            )}
+
+            {/* Request Reset Form */}
+            {!token && !success && (
+              <form onSubmit={handleRequestReset}>
+                <TextField
+                  fullWidth
+                  label="E-Mail"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  margin="normal"
+                  required
+                  autoComplete="email"
+                  disabled={loading}
+                  sx={{ mb: 3 }}
+                />
+
+                <Button
+                  fullWidth
+                  type="submit"
+                  variant="contained"
+                  size="large"
+                  disabled={loading}
+                  sx={{ mb: 2 }}
+                >
+                  {loading ? 'Wird gesendet...' : 'Reset-Link senden'}
+                </Button>
+
+                <Typography variant="body2" align="center">
+                  <Link
+                    component={RouterLink}
+                    to="/login"
+                    underline="hover"
+                  >
+                    Zurück zum Login
+                  </Link>
+                </Typography>
+              </form>
+            )}
+
+            {/* Reset Password Form */}
+            {token && !success && (
+              <form onSubmit={handleResetPassword}>
+                <TextField
+                  fullWidth
+                  label="Neues Passwort"
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  margin="normal"
+                  required
+                  helperText="Mindestens 8 Zeichen"
+                  autoComplete="new-password"
+                  disabled={loading}
+                />
+                <TextField
+                  fullWidth
+                  label="Passwort bestätigen"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  margin="normal"
+                  required
+                  autoComplete="new-password"
+                  disabled={loading}
+                  sx={{ mb: 3 }}
+                />
+
+                <Button
+                  fullWidth
+                  type="submit"
+                  variant="contained"
+                  size="large"
+                  disabled={loading}
+                  sx={{ mb: 2 }}
+                >
+                  {loading ? 'Wird zurückgesetzt...' : 'Passwort zurücksetzen'}
+                </Button>
+              </form>
+            )}
+
+            {/* Success State with Token */}
+            {success && step === 1 && !token && (
+              <Box sx={{ textAlign: 'center', mt: 3 }}>
+                <Typography variant="body2">
+                  <Link
+                    component={RouterLink}
+                    to="/login"
+                    underline="hover"
+                  >
+                    Zurück zum Login
+                  </Link>
+                </Typography>
+              </Box>
+            )}
+          </CardContent>
+        </Card>
+      </motion.div>
+    </Box>
+  );
+};
+
+export default PasswordResetPage;

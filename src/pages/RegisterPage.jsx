@@ -1,11 +1,19 @@
+// src/pages/RegisterPage.jsx
 import React, { useState } from 'react';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
+import {
+  Box,
+  Card,
+  CardContent,
+  TextField,
+  Button,
+  Typography,
+  Link,
+  Alert,
+} from '@mui/material';
+import { motion } from 'framer-motion';
 import { register } from '../api/auth';
 import { getErrorMessage } from '../api/client';
-import Button from '../components/shared/Button';
-import Input from '../components/shared/Input';
-import Card from '../components/shared/Card';
-import Alert from '../components/shared/Alert';
 
 const RegisterPage = () => {
   const navigate = useNavigate();
@@ -18,8 +26,19 @@ const RegisterPage = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    if (!email || !password || !confirmPassword) {
+      setError('Bitte alle Felder ausfüllen');
+      return;
+    }
+
     if (password !== confirmPassword) {
       setError('Passwörter stimmen nicht überein');
+      return;
+    }
+
+    if (password.length < 8) {
+      setError('Passwort muss mindestens 8 Zeichen lang sein');
       return;
     }
 
@@ -38,67 +57,128 @@ const RegisterPage = () => {
   };
 
   return (
-    <div style={{ 
-      minHeight: '100vh', 
-      display: 'flex', 
-      alignItems: 'center', 
-      justifyContent: 'center', 
-      background: '#f5f5f5' 
-    }}>
-      <Card style={{ maxWidth: '450px', width: '100%', margin: '20px' }}>
-        <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-          <div style={{ fontSize: '3rem', marginBottom: '16px' }}>👤</div>
-          <h1 style={{ margin: '0 0 8px', fontSize: '2rem', color: '#333' }}>
-            Konto erstellen
-          </h1>
-          <p style={{ margin: 0, color: '#666' }}>Registriere dich für die AI Platform</p>
-        </div>
+    <Box
+      sx={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        bgcolor: 'background.default',
+        p: 2,
+      }}
+    >
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+      >
+        <Card sx={{ maxWidth: 450, width: '100%' }}>
+          <CardContent sx={{ p: 4 }}>
+            {/* Logo & Title */}
+            <Box sx={{ textAlign: 'center', mb: 4 }}>
+              <Box
+                sx={{
+                  width: 80,
+                  height: 80,
+                  borderRadius: '50%',
+                  background: 'linear-gradient(135deg, #4299E1 0%, #38B2AC 100%)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '3rem',
+                  mb: 2,
+                }}
+              >
+                👤
+              </Box>
+              <Typography variant="h4" fontWeight={600} gutterBottom>
+                Konto erstellen
+              </Typography>
+              <Typography color="text.secondary">
+                Registrieren Sie sich für die AI Platform
+              </Typography>
+            </Box>
 
-        {error && <Alert severity="error" onClose={() => setError(null)}>{error}</Alert>}
-        {success && <Alert severity="success">Registrierung erfolgreich! Weiterleitung...</Alert>}
+            {/* Error Alert */}
+            {error && (
+              <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
+                {error}
+              </Alert>
+            )}
 
-        <form onSubmit={handleSubmit}>
-          <Input 
-            label="E-Mail" 
-            type="email" 
-            value={email} 
-            onChange={(e) => setEmail(e.target.value)} 
-            fullWidth 
-            required 
-          />
-          <Input 
-            label="Passwort" 
-            type="password" 
-            value={password} 
-            onChange={(e) => setPassword(e.target.value)} 
-            fullWidth 
-            required 
-          />
-          <Input 
-            label="Passwort bestätigen" 
-            type="password" 
-            value={confirmPassword} 
-            onChange={(e) => setConfirmPassword(e.target.value)} 
-            fullWidth 
-            required 
-          />
+            {/* Success Alert */}
+            {success && (
+              <Alert severity="success" sx={{ mb: 3 }}>
+                Registrierung erfolgreich! Weiterleitung zum Login...
+              </Alert>
+            )}
 
-          <Button type="submit" fullWidth loading={loading} disabled={loading || success}>
-            Registrieren
-          </Button>
+            {/* Register Form */}
+            <form onSubmit={handleSubmit}>
+              <TextField
+                fullWidth
+                label="E-Mail"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                margin="normal"
+                required
+                autoComplete="email"
+                disabled={loading || success}
+              />
+              <TextField
+                fullWidth
+                label="Passwort"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                margin="normal"
+                required
+                helperText="Mindestens 8 Zeichen"
+                autoComplete="new-password"
+                disabled={loading || success}
+              />
+              <TextField
+                fullWidth
+                label="Passwort bestätigen"
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                margin="normal"
+                required
+                autoComplete="new-password"
+                disabled={loading || success}
+                sx={{ mb: 3 }}
+              />
 
-          <p style={{ textAlign: 'center', marginTop: '24px', color: '#666' }}>
-            Bereits ein Account?{' '}
-            <RouterLink 
-              to="/login" 
-              style={{ color: '#667eea', textDecoration: 'none', fontWeight: 600 }}
-            >
-              Jetzt anmelden
-            </RouterLink>
-          </p>
-        </form>
-      </Card>
-    </div>
+              <Button
+                fullWidth
+                type="submit"
+                variant="contained"
+                size="large"
+                disabled={loading || success}
+                sx={{ mb: 2 }}
+              >
+                {loading ? 'Wird registriert...' : 'Registrieren'}
+              </Button>
+            </form>
+
+            {/* Login Link */}
+            <Typography variant="body2" align="center" color="text.secondary">
+              Bereits ein Account?{' '}
+              <Link
+                component={RouterLink}
+                to="/login"
+                fontWeight={600}
+                underline="hover"
+              >
+                Jetzt anmelden
+              </Link>
+            </Typography>
+          </CardContent>
+        </Card>
+      </motion.div>
+    </Box>
   );
 };
 

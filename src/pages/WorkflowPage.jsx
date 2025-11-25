@@ -1,41 +1,76 @@
+// src/pages/WorkflowPage.jsx
 import React, { useState, useEffect } from 'react';
-import { 
-  createWorkflow, 
-  getWorkflowStatus, 
-  confirmWorkflowStep, 
-  listWorkflows, 
-  getWorkflowCapabilities 
+import {
+  Box,
+  Card,
+  CardContent,
+  Typography,
+  Button,
+  Grid,
+  Chip,
+  LinearProgress,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  MenuItem,
+  Select,
+  FormControl,
+  InputLabel,
+  Alert,
+  Snackbar,
+} from '@mui/material';
+import { Add as AddIcon } from '@mui/icons-material';
+import { AnimatePresence } from 'framer-motion';
+import {
+  createWorkflow,
+  listWorkflows,
+  getWorkflowStatus,
+  confirmWorkflowStep,
+  getWorkflowCapabilities,
+  cancelWorkflow,
+  deleteWorkflow,
 } from '../api/workflow';
 import { getErrorMessage } from '../api/client';
-import Card from '../components/shared/Card';
-import Button from '../components/shared/Button';
-import Input from '../components/shared/Input';
-import Alert from '../components/shared/Alert';
-import Spinner from '../components/shared/Spinner';
+
+// Import der neuen Komponenten
+import WorkflowCard from '../components/WorkflowCard';
+import WorkflowDetailsModal from '../components/WorkflowDetailsModal';
 
 const WorkflowPage = () => {
-  const [intent, setIntent] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [currentWorkflow, setCurrentWorkflow] = useState(null);
-  const [workflowStatus, setWorkflowStatus] = useState(null);
   const [workflows, setWorkflows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(null);
   const [capabilities, setCapabilities] = useState(null);
+  const [filterStatus, setFilterStatus] = useState('');
 
+  // Modals
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showDetailModal, setShowDetailModal] = useState(false);
+
+  // Form States
+  const [newWorkflowIntent, setNewWorkflowIntent] = useState('');
+  const [selectedWorkflow, setSelectedWorkflow] = useState(null);
+
+  // Load workflows and capabilities
   useEffect(() => {
-    loadCapabilities();
     loadWorkflows();
-  }, []);
+    loadCapabilities();
+  }, [filterStatus]);
 
-  useEffect(() => {
-    if (currentWorkflow?.session_id) {
-      const interval = setInterval(() => {
-        pollWorkflowStatus(currentWorkflow.session_id);
-      }, 3000);
-      
-      return () => clearInterval(interval);
+  const loadWorkflows = async () => {
+    try {
+      setLoading(true);
+      const data = await listWorkflows(filterStatus || null, 50);
+      setWorkflows(data.workflows || []);
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setLoading(false);
     }
-  }, [currentWorkflow]);
+  };
 
   const loadCapabilities = async () => {
     try {
@@ -46,308 +81,252 @@ const WorkflowPage = () => {
     }
   };
 
-  const loadWorkflows = async () => {
-    try {
-      const data = await listWorkflows();
-      setWorkflows(data.workflows || []);
-    } catch (err) {
-      console.error('Failed to load workflows:', err);
-    }
-  };
-
-  const pollWorkflowStatus = async (sessionId) => {
-    try {
-      const data = await getWorkflowStatus(sessionId);
-      setWorkflowStatus(data);
-      
-      if (data.status === 'completed' || data.status === 'failed') {
-        setCurrentWorkflow(null);
-        loadWorkflows();
-      }
-    } catch (err) {
-      console.error('Failed to poll workflow status:', err);
-    }
-  };
+  const MOCK_USER_ID = 'user-12345'; // <-- HIER DEFINIEREN
 
   const handleCreateWorkflow = async () => {
-    if (!intent.trim()) return;
+      if (!newWorkflowIntent.trim()) {
+        setError('Bitte geben Sie einen Intent ein');
+        return;
+      }
+
+      try {
+        const sessionId = `wf-${Date.now()}`;
+        
+        // KORRIGIERTER AUFRUF: Übergabe des MOCK_USER_ID als dritter Parameter
+        await createWorkflow(newWorkflowIntent, sessionId, MOCK_USER_ID); 
+        
+        setSuccess('Workflow erfolgreich erstellt!');
+        setShowCreateModal(false);
+        setNewWorkflowIntent('');
+        loadWorkflows();
+      } catch (err) {
+        setError(getErrorMessage(err));
+      }
+  };
+
+  const handleCancelWorkflow = async (workflowId) => {
+    if (!window.confirm('Möchten Sie diesen Workflow wirklich abbrechen?'))
+      return;
 
     try {
-      setLoading(true);
-      setError(null);
-      
-      const sessionId = `wf-${Date.now()}`;
-      const data = await createWorkflow(intent, sessionId);
-      
-      setCurrentWorkflow(data);
-      setIntent('');
-      
-      // Start polling status
-      setTimeout(() => pollWorkflowStatus(sessionId), 1000);
+      await cancelWorkflow(workflowId);
+      setSuccess('Workflow wurde abgebrochen');
+      loadWorkflows();
     } catch (err) {
       setError(getErrorMessage(err));
-    } finally {
-      setLoading(false);
     }
   };
 
-  const handleConfirmStep = async (confirmed) => {
-    if (!currentWorkflow?.workflow_id) return;
+  const handleDeleteWorkflow = async (workflowId) => {
+    if (!window.confirm('Möchten Sie diesen Workflow wirklich löschen?')) return;
 
     try {
-      await confirmWorkflowStep(currentWorkflow.workflow_id, confirmed);
-      pollWorkflowStatus(currentWorkflow.session_id);
+      await deleteWorkflow(workflowId);
+      setSuccess('Workflow wurde gelöscht');
+      loadWorkflows();
     } catch (err) {
       setError(getErrorMessage(err));
     }
   };
 
-  const getStatusIcon = (status) => {
-    switch (status) {
-      case 'created': return '🆕';
-      case 'running': return '🔄';
-      case 'waiting_confirmation': return '⏸️';
-      case 'completed': return '✅';
-      case 'failed': return '❌';
-      case 'cancelled': return '🚫';
-      default: return '⚪';
+  const handleShowDetails = async (workflow) => {
+    try {
+      const details = await getWorkflowStatus(workflow.session_id);
+      setSelectedWorkflow(details);
+      setShowDetailModal(true);
+    } catch (err) {
+      setError(getErrorMessage(err));
     }
   };
 
-  const getStepStatusIcon = (status) => {
-    switch (status) {
-      case 'pending': return '⏳';
-      case 'running': return '🔄';
-      case 'completed': return '✅';
-      case 'failed': return '❌';
-      default: return '⚪';
+  const handleConfirmStep = async (workflowId, confirmed) => {
+    try {
+      await confirmWorkflowStep(workflowId, confirmed);
+      setSuccess(confirmed ? 'Step bestätigt' : 'Step abgelehnt');
+      // Update details modal and list
+      if (selectedWorkflow) {
+        const updated = await getWorkflowStatus(selectedWorkflow.session_id);
+        setSelectedWorkflow(updated);
+      }
+      loadWorkflows();
+    } catch (err) {
+      setError(getErrorMessage(err));
     }
   };
 
   return (
-    <div>
+    <Box>
       {/* Header */}
-      <Card style={{ 
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', 
-        color: 'white', 
-        marginBottom: '24px' 
-      }}>
-        <h1 style={{ margin: '0 0 8px', fontSize: '2.5rem' }}>🔄 Workflow Manager</h1>
-        <p style={{ margin: 0, fontSize: '0.9rem', opacity: 0.9 }}>
-          Erstelle komplexe Multi-Step Workflows mit AI-Unterstützung
-        </p>
-      </Card>
+      <Box sx={{ mb: 4 }}>
+        <Typography variant="h4" fontWeight={600} gutterBottom>
+          Workflow Manager
+        </Typography>
+        <Typography variant="body1" color="text.secondary">
+          Erstellen und verwalten Sie komplexe Multi-Step Workflows mit
+          AI-Unterstützung
+        </Typography>
+      </Box>
 
-      {error && <Alert severity="error" onClose={() => setError(null)}>{error}</Alert>}
-
-      {/* Capabilities */}
+      {/* Capabilities Card */}
       {capabilities && (
-        <Card style={{ marginBottom: '24px', background: '#f9f9f9' }}>
-          <h3 style={{ margin: '0 0 12px' }}>🛠️ Verfügbare Tools ({capabilities.tools_count})</h3>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-            {capabilities.tools.map((tool, i) => (
-              <span 
-                key={i}
-                style={{
-                  padding: '6px 12px',
-                  background: 'white',
-                  borderRadius: '6px',
-                  fontSize: '0.85rem',
-                  color: '#667eea',
-                  border: '1px solid #e0e0e0'
-                }}
-              >
-                {tool}
-              </span>
-            ))}
-          </div>
+        <Card sx={{ mb: 3, bgcolor: 'background.paper' }}>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>
+              🛠️ Verfügbare Tools ({capabilities.tools_count})
+            </Typography>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 2 }}>
+              {capabilities.tools.map((tool, i) => (
+                <Chip
+                  key={i}
+                  label={tool}
+                  size="small"
+                  variant="outlined"
+                  color="primary"
+                />
+              ))}
+            </Box>
+          </CardContent>
         </Card>
       )}
 
-      {/* Create Workflow */}
-      <Card style={{ marginBottom: '24px' }}>
-        <h3 style={{ margin: '0 0 16px' }}>Neuen Workflow erstellen</h3>
-        <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end' }}>
-          <div style={{ flex: 1 }}>
-            <Input
-              label="Workflow Intent (Beschreibe deine Aufgabe)"
-              value={intent}
-              onChange={(e) => setIntent(e.target.value)}
-              placeholder="z.B. 'Finde eine Wohnung in Berlin und vereinbare Besichtigungstermine'"
-              fullWidth
-              disabled={loading}
-            />
-          </div>
-          <Button 
+      {/* Actions Bar */}
+      <Box sx={{ mb: 3, display: 'flex', gap: 2, alignItems: 'center' }}>
+        <Button
+          variant="contained"
+          startIcon={<AddIcon />}
+          onClick={() => setShowCreateModal(true)}
+        >
+          Neuer Workflow
+        </Button>
+
+        <Box sx={{ flexGrow: 1 }} />
+
+        <FormControl size="small" sx={{ minWidth: 200 }}>
+          <InputLabel>Status Filter</InputLabel>
+          <Select
+            value={filterStatus}
+            label="Status Filter"
+            onChange={(e) => setFilterStatus(e.target.value)}
+          >
+            <MenuItem value="">Alle</MenuItem>
+            <MenuItem value="running">Läuft</MenuItem>
+            <MenuItem value="completed">Abgeschlossen</MenuItem>
+            <MenuItem value="failed">Fehlgeschlagen</MenuItem>
+            <MenuItem value="waiting_confirmation">
+              Wartet auf Bestätigung
+            </MenuItem>
+            <MenuItem value="cancelled">Abgebrochen</MenuItem>
+          </Select>
+        </FormControl>
+      </Box>
+
+      {/* Workflows Grid */}
+      {loading ? (
+        <Box sx={{ textAlign: 'center', py: 8 }}>
+          <LinearProgress />
+          <Typography sx={{ mt: 2 }}>Lade Workflows...</Typography>
+        </Box>
+      ) : workflows.length === 0 ? (
+        <Card sx={{ textAlign: 'center', py: 8 }}>
+          <CardContent>
+            <Typography variant="h2" sx={{ mb: 2 }}>
+              🔄
+            </Typography>
+            <Typography variant="h6" gutterBottom>
+              Keine Workflows vorhanden
+            </Typography>
+            <Typography color="text.secondary" sx={{ mb: 3 }}>
+              Erstellen Sie Ihren ersten Workflow, um zu beginnen
+            </Typography>
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={() => setShowCreateModal(true)}
+            >
+              Neuer Workflow
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <Grid container spacing={3}>
+          <AnimatePresence>
+            {workflows.map((workflow) => (
+              <Grid item xs={12} md={6} lg={4} key={workflow.id}>
+                <WorkflowCard
+                  workflow={workflow}
+                  onShowDetails={handleShowDetails}
+                  onCancel={handleCancelWorkflow}
+                  onDelete={handleDeleteWorkflow}
+                />
+              </Grid>
+            ))}
+          </AnimatePresence>
+        </Grid>
+      )}
+
+      {/* Create Workflow Modal */}
+      <Dialog
+        open={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Neuer Workflow</DialogTitle>
+        <DialogContent>
+          <TextField
+            autoFocus
+            margin="dense"
+            label="Workflow Intent (Beschreiben Sie Ihre Aufgabe)"
+            fullWidth
+            multiline
+            rows={4}
+            value={newWorkflowIntent}
+            onChange={(e) => setNewWorkflowIntent(e.target.value)}
+            placeholder="z.B. 'Finde eine Wohnung in Berlin und vereinbare Besichtigungstermine'"
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShowCreateModal(false)}>Abbrechen</Button>
+          <Button
             onClick={handleCreateWorkflow}
-            disabled={loading || !intent.trim()}
-            loading={loading}
+            variant="contained"
+            disabled={!newWorkflowIntent.trim()}
           >
-            Starten
+            Erstellen
           </Button>
-        </div>
-      </Card>
+        </DialogActions>
+      </Dialog>
 
-      {/* Current Workflow Status */}
-      {workflowStatus && (
-        <Card style={{ marginBottom: '24px' }}>
-          <h3 style={{ margin: '0 0 16px' }}>
-            {getStatusIcon(workflowStatus.status)} Aktueller Workflow
-          </h3>
-          
-          <div style={{ marginBottom: '16px' }}>
-            <p style={{ margin: '0 0 4px', fontSize: '0.9rem', color: '#666' }}>Status</p>
-            <p style={{ margin: 0, fontWeight: 500 }}>
-              {workflowStatus.status} • Schritt {workflowStatus.current_step} / {workflowStatus.total_steps}
-            </p>
-          </div>
+      {/* Workflow Details Modal */}
+      <WorkflowDetailsModal
+        open={showDetailModal}
+        onClose={() => setShowDetailModal(false)}
+        workflowDetails={selectedWorkflow}
+        onConfirmStep={handleConfirmStep}
+      />
 
-          {/* Progress Bar */}
-          <div style={{ marginBottom: '24px' }}>
-            <div style={{
-              height: '8px',
-              background: '#e0e0e0',
-              borderRadius: '4px',
-              overflow: 'hidden'
-            }}>
-              <div style={{
-                height: '100%',
-                background: 'linear-gradient(90deg, #667eea, #764ba2)',
-                width: `${(workflowStatus.current_step / workflowStatus.total_steps) * 100}%`,
-                transition: 'width 0.3s'
-              }} />
-            </div>
-          </div>
+      {/* Snackbars */}
+      <Snackbar
+        open={!!error}
+        autoHideDuration={6000}
+        onClose={() => setError(null)}
+      >
+        <Alert severity="error" onClose={() => setError(null)}>
+          {error}
+        </Alert>
+      </Snackbar>
 
-          {/* Steps */}
-          <h4 style={{ margin: '0 0 12px' }}>Schritte:</h4>
-          <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
-            {workflowStatus.steps?.map((step, i) => (
-              <div 
-                key={i}
-                style={{
-                  padding: '12px',
-                  marginBottom: '8px',
-                  background: step.status === 'running' ? '#e3f2fd' : 'white',
-                  border: '1px solid #e0e0e0',
-                  borderRadius: '8px'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <span style={{ fontSize: '1.5rem' }}>
-                    {getStepStatusIcon(step.status)}
-                  </span>
-                  <div style={{ flex: 1 }}>
-                    <p style={{ margin: '0 0 4px', fontWeight: 500 }}>
-                      Schritt {step.step_number}: {step.type}
-                    </p>
-                    <p style={{ margin: 0, fontSize: '0.9rem', color: '#666' }}>
-                      {step.description}
-                    </p>
-                    {step.error && (
-                      <p style={{ margin: '8px 0 0', color: '#f44336', fontSize: '0.85rem' }}>❌ Error: {step.error}</p>
-)}
-{step.result && (
-<div style={{
-marginTop: '8px',
-padding: '8px',
-background: '#f5f5f5',
-borderRadius: '4px',
-fontSize: '0.85rem'
-}}>
-<strong>Ergebnis:</strong> {JSON.stringify(step.result).substring(0, 200)}...
-</div>
-)}
-</div>
-</div>
-            {/* Confirmation Buttons */}
-            {step.requires_confirmation && step.status === 'waiting_confirmation' && (
-              <div style={{ 
-                marginTop: '12px', 
-                display: 'flex', 
-                gap: '8px',
-                paddingTop: '12px',
-                borderTop: '1px solid #e0e0e0'
-              }}>
-                <Button 
-                  color="success" 
-                  onClick={() => handleConfirmStep(true)}
-                  style={{ flex: 1 }}
-                >
-                  ✓ Bestätigen
-                </Button>
-                <Button 
-                  color="error" 
-                  onClick={() => handleConfirmStep(false)}
-                  style={{ flex: 1 }}
-                >
-                  ✗ Ablehnen
-                </Button>
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-    </Card>
-  )}
-
-  {/* Workflow History */}
-  <Card>
-    <h3 style={{ margin: '0 0 16px' }}>📜 Workflow-Verlauf</h3>
-    {workflows.length === 0 ? (
-      <p style={{ color: '#666', textAlign: 'center', padding: '20px' }}>
-        Noch keine Workflows vorhanden
-      </p>
-    ) : (
-      <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
-        {workflows.map((wf, i) => (
-          <div 
-            key={i}
-            style={{
-              padding: '12px',
-              marginBottom: '8px',
-              background: 'white',
-              border: '1px solid #e0e0e0',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              transition: 'all 0.2s'
-            }}
-            onClick={() => {
-              setCurrentWorkflow(wf);
-              pollWorkflowStatus(wf.session_id);
-            }}
-            onMouseEnter={(e) => e.currentTarget.style.background = '#f9f9f9'}
-            onMouseLeave={(e) => e.currentTarget.style.background = 'white'}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ flex: 1 }}>
-                <p style={{ margin: '0 0 4px', fontWeight: 500 }}>
-                  {getStatusIcon(wf.status)} {wf.user_intent?.substring(0, 60)}
-                  {wf.user_intent?.length > 60 && '...'}
-                </p>
-                <p style={{ margin: 0, fontSize: '0.85rem', color: '#666' }}>
-                  Schritte: {wf.current_step}/{wf.steps_count} • 
-                  Erstellt: {new Date(wf.created_at).toLocaleString('de-DE')}
-                </p>
-              </div>
-              <span style={{
-                padding: '4px 12px',
-                background: wf.status === 'completed' ? '#4caf50' : 
-                           wf.status === 'failed' ? '#f44336' : '#ff9800',
-                color: 'white',
-                borderRadius: '4px',
-                fontSize: '0.75rem',
-                fontWeight: 600
-              }}>
-                {wf.status}
-              </span>
-            </div>
-          </div>
-        ))}
-      </div>
-    )}
-  </Card>
-</div>
-);
+      <Snackbar
+        open={!!success}
+        autoHideDuration={4000}
+        onClose={() => setSuccess(null)}
+      >
+        <Alert severity="success" onClose={() => setSuccess(null)}>
+          {success}
+        </Alert>
+      </Snackbar>
+    </Box>
+  );
 };
+
 export default WorkflowPage;
