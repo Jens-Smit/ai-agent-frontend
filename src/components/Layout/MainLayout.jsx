@@ -1,94 +1,84 @@
-// src/components/Layout/MainLayout.jsx
-import React, { useState } from 'react';
-import { Box, AppBar, Toolbar, IconButton, Typography, Avatar, useTheme as useMuiTheme } from '@mui/material';
-import { Menu as MenuIcon, Brightness4, Brightness7 } from '@mui/icons-material';
-import { useAuth } from '../../context/AuthContext';
-import { useTheme } from '../../context/ThemeContext';
+import { useState } from 'react';
+import { Box, useTheme, useMediaQuery } from '@mui/material';
+import { motion, AnimatePresence } from 'framer-motion';
+import Header from './Header';
 import Sidebar from './Sidebar';
 
-const MainLayout = ({ children }) => {
-  const muiTheme = useMuiTheme();
-  const { isDark, toggleTheme } = useTheme();
-  const { user } = useAuth();
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+const SIDEBAR_WIDTH = 280;
+const SIDEBAR_COLLAPSED_WIDTH = 70;
 
-  const sidebarWidth = sidebarOpen ? 260 : 80;
+function MainLayout({ children }) {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const [sidebarOpen, setSidebarOpen] = useState(!isMobile);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  const toggleSidebar = () => {
+    if (isMobile) {
+      setSidebarOpen(!sidebarOpen);
+    } else {
+      setSidebarCollapsed(!sidebarCollapsed);
+    }
+  };
+
+  const closeSidebar = () => {
+    if (isMobile) {
+      setSidebarOpen(false);
+    }
+  };
+
+  const sidebarWidth = sidebarCollapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_WIDTH;
 
   return (
-    <Box sx={{ display: 'flex', minHeight: '100vh' }}>
-      {/* Sidebar */}
-      <Sidebar open={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)} />
+    <Box
+      sx={{
+        display: 'flex',
+        minHeight: '100vh',
+        backgroundColor: 'background.default',
+      }}
+    >
+      <Header
+        onMenuClick={toggleSidebar}
+        sidebarWidth={isMobile ? 0 : sidebarWidth}
+      />
 
-      {/* Main Content */}
+      <Sidebar
+        open={sidebarOpen}
+        collapsed={sidebarCollapsed}
+        onClose={closeSidebar}
+        isMobile={isMobile}
+        width={SIDEBAR_WIDTH}
+        collapsedWidth={SIDEBAR_COLLAPSED_WIDTH}
+      />
+
       <Box
         component="main"
         sx={{
           flexGrow: 1,
-          ml: `${sidebarWidth}px`,
-          transition: 'margin-left 0.3s',
+          pt: { xs: 8, sm: 9 },
+          pb: 3,
+          px: { xs: 2, sm: 3 },
+          ml: isMobile ? 0 : `${sidebarWidth}px`,
+          transition: theme.transitions.create(['margin'], {
+            easing: theme.transitions.easing.sharp,
+            duration: theme.transitions.duration.leavingScreen,
+          }),
+          minHeight: '100vh',
         }}
       >
-        {/* Header */}
-        <AppBar
-          position="sticky"
-          elevation={0}
-          sx={{
-            bgcolor: 'background.paper',
-            borderBottom: `1px solid ${muiTheme.palette.divider}`,
-          }}
-        >
-          <Toolbar>
-            <IconButton
-              edge="start"
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              sx={{ mr: 2, display: { sm: 'none' } }}
-            >
-              <MenuIcon />
-            </IconButton>
-
-            <Box sx={{ flexGrow: 1 }} />
-
-            {/* Theme Toggle */}
-            <IconButton onClick={toggleTheme} sx={{ mr: 2 }}>
-              {isDark ? <Brightness7 /> : <Brightness4 />}
-            </IconButton>
-
-            {/* User Profile */}
-            <Box
-              sx={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 1.5,
-                px: 2,
-                py: 1,
-                borderRadius: 1,
-                border: `1px solid ${muiTheme.palette.divider}`,
-              }}
-            >
-              <Avatar
-                sx={{
-                  width: 32,
-                  height: 32,
-                  bgcolor: 'primary.main',
-                  fontSize: '0.875rem',
-                }}
-              >
-                {user?.email?.charAt(0).toUpperCase() || 'U'}
-              </Avatar>
-              <Typography variant="body2" fontWeight={500}>
-                {user?.name || user?.email}
-              </Typography>
-            </Box>
-          </Toolbar>
-        </AppBar>
-
-        {/* Page Content */}
-        <Box sx={{ p: 4 }}>
-          {children}
-        </Box>
+        <AnimatePresence mode="wait">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.2 }}
+          >
+            {children}
+          </motion.div>
+        </AnimatePresence>
       </Box>
     </Box>
   );
-};
+}
 
 export default MainLayout;
