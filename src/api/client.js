@@ -34,7 +34,7 @@ apiClient.interceptors.response.use(
       
       // Could implement token refresh logic here if needed
       // For now, redirect to login
-      window.location.href = '/login';
+      //window.location.href = '/login';
     }
 
     // Handle rate limiting (429)

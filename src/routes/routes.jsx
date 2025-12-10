@@ -59,21 +59,16 @@ export const routes = [
     isProtected: true,
   },
   
-  // Workflow Routes - Verschachtelte Struktur
+  // Workflow Routes - KORRIGIERT: Parent Route ohne children
   {
     path: '/workflows',
-    element: WorkflowPage,
+    element: WorkflowList,
     isProtected: true,
-    children: [
-      {
-        index: true, // Index Route -> /workflows
-        element: WorkflowList,
-      },
-      {
-        path: ':id', // Child Route -> /workflows/:id
-        element: WorkflowDetailsPage,
-      },
-    ],
+  },
+  {
+    path: '/workflows/:id',
+    element: WorkflowDetailsPage,
+    isProtected: true,
   },
   
   // Agent Routes

@@ -23,6 +23,7 @@ export const agentService = {
   // Poll agent status with interval
   pollAgentStatus: (sessionId, onUpdate, interval = 2000) => {
     let lastTimestamp = null;
+    let timeoutId; // NEU: Zum Speichern der Timeout-ID
     
     const poll = async () => {
       try {
@@ -34,8 +35,9 @@ export const agentService = {
         
         onUpdate(status);
         
+        // Polling stoppen, wenn die gesamte Agenten-Sitzung abgeschlossen oder fehlerhaft ist
         if (!status.completed && !status.error) {
-          setTimeout(poll, interval);
+          timeoutId = setTimeout(poll, interval); // Timeout-ID speichern
         }
       } catch (error) {
         console.error('Error polling agent status:', error);
@@ -44,5 +46,13 @@ export const agentService = {
     };
     
     poll();
+    
+    // NEU: Cleanup-Funktion zurückgeben
+    return () => {
+        if (timeoutId) {
+            clearTimeout(timeoutId);
+        }
+    };
   },
+
 };

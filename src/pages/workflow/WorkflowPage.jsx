@@ -1,23 +1,24 @@
+/**
+ * WorkflowPage.jsx - WORKFLOW HAUPTSEITE - MIT NESTED ROUTES
+ * 
+ * Diese Komponente dient als Container für Workflow-spezifische Routes.
+ * Sie rendert entweder WorkflowList (Index) oder WorkflowDetailsPage (/:id)
+ */
+
 import { Outlet } from 'react-router-dom';
 import { Box } from '@mui/material';
 
-/**
- * WorkflowPage ist nur ein Layout-Wrapper
- * Der eigentliche Inhalt kommt über <Outlet /> (React Router)
- */
-function WorkflowPage() {
+export default function WorkflowPage() {
   return (
     <Box 
       sx={{ 
-        minHeight: '100vh', 
-        bgcolor: 'background.default',
-        p: 0
+        width: '100%',
+        minHeight: '100vh',
+        bgcolor: 'background.default'
       }}
     >
-      {/* Hier wird der Sub-Route Content gerendert */}
+      {/* Outlet rendert die verschachtelten Routes */}
       <Outlet />
     </Box>
   );
 }
-
-export default WorkflowPage;

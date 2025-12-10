@@ -56,7 +56,18 @@ export const workflowService = {
     const response = await apiClient.post(`/api/workflow/${workflowId}/restart`, options);
     return response.data;
   },
-
+  /**
+ * Wählt einen Job für einen wartenden Decision-Step im Workflow
+ * @param {number} workflowId - Die ID des Workflows
+ * @param {string} selectedJobrefnr - Der vom Benutzer ausgewählte Job/Ergebnis
+ */
+  selectJob: async (workflowId, selectedJobrefnr) => {
+    // Der Pfad `/api/workflow/` wird angenommen, basierend auf den bestehenden Endpunkten
+    const response = await apiClient.post(`/api/workflow/${workflowId}/select-job`, { 
+      selected_job: selectedJobrefnr 
+    });
+    return response.data;
+  },
   /**
    * NEU: Injiziert den User-Kontext (Auth) in einen wartenden Workflow
    */
